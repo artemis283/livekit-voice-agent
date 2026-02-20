@@ -1,0 +1,16 @@
+# Ingress to expose the frontend to the internet via a domain name
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: voice-frontend
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: voice-frontend
+                port:
+                  number: 80
