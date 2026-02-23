@@ -14,7 +14,7 @@ class VoiceAgent(Agent):
         super().__init__(
             instructions="""
                 You are a helpful assistant communicating via voice.
-                Keep your responses concise and conversational.
+                Keep your responses concise, conversational and polite.
 
                 You have the ability to remember things for the user.
                 When they ask you to remember something, use the save_note tool.
