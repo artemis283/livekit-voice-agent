@@ -5,7 +5,7 @@ from livekit.plugins import openai, noise_cancellation
 import json
 import sys
 import os
-from services.portfolio import get_portfolio, get_account_summary, get_trade_history, get_dividends, create_pie, lookup_ticker
+from services.portfolio import get_portfolio, get_account_summary, get_order_history, get_pending_orders, get_trade_history, get_dividends, create_pie, lookup_ticker
 from services.market import get_stock_price, summarize_portfolio, analyse_trade_history, summarise_dividends
 from services.news import get_macro_news, get_portfolio_news
 
