@@ -3,7 +3,7 @@ import os
 import requests
 
 # Demo paper-trading base URL. Switch to https://live.trading212.com/api/v0 for real money.
-BASE_URL = os.getenv("TRADING212_BASE_URL", "https://demo.trading212.com/api/v0")
+BASE_URL = os.getenv("TRADING212_BASE_URL", "https://live.trading212.com/api/v0")
 
 
 def _get_auth_header() -> str:
@@ -40,5 +40,27 @@ def get_account_summary() -> dict:
     """Fetch account cash balance and overall value from Trading 212."""
     headers = {"Authorization": _get_auth_header()}
     r = requests.get(f"{BASE_URL}/equity/account/summary", headers=headers, timeout=10)
+    r.raise_for_status()
+    return r.json()
+
+
+def get_order_history(limit: int = 20) -> list:
+    """Fetch recent historical orders from Trading 212."""
+    headers = {"Authorization": _get_auth_header()}
+    r = requests.get(
+        f"{BASE_URL}/equity/history/orders",
+        headers=headers,
+        params={"limit": limit},
+        timeout=10,
+    )
+    r.raise_for_status()
+    data = r.json()
+    return data.get("items", data)
+
+
+def get_pending_orders() -> list:
+    """Fetch all currently pending (unfilled) orders from Trading 212."""
+    headers = {"Authorization": _get_auth_header()}
+    r = requests.get(f"{BASE_URL}/equity/orders", headers=headers, timeout=10)
     r.raise_for_status()
     return r.json()
