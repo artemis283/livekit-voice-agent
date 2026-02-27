@@ -11,6 +11,7 @@ dependencies = [
     { name = "livekit-agents", extra = ["openai"] },
     { name = "livekit-plugins-noise-cancellation" },
     { name = "python-dotenv" },
+    { name = "requests" },
 ]
 
 [package.metadata]
@@ -19,6 +20,7 @@ requires-dist = [
     { name = "livekit-agents", extras = ["openai"], specifier = "~=1.3" },
     { name = "livekit-plugins-noise-cancellation", specifier = "~=0.2" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
+    { name = "requests", specifier = ">=2.32" },
 ]
 
 [[package]]
