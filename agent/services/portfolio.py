@@ -1,5 +1,6 @@
 import base64
 import os
+import time
 import requests
 
 # Demo paper-trading base URL. Switch to https://live.trading212.com/api/v0 for real money.
@@ -18,7 +19,7 @@ def _get_auth_header() -> str:
 
 
 def get_portfolio() -> dict:
-    """Fetch all open positions from the Trading 212 demo account."""
+    """Fetch all open positions from the Trading 212 account."""
     headers = {"Authorization": _get_auth_header()}
     r = requests.get(f"{BASE_URL}/equity/positions", headers=headers, timeout=10)
     r.raise_for_status()
@@ -27,11 +28,15 @@ def get_portfolio() -> dict:
     result = {}
     for pos in positions:
         ticker = pos.get("ticker", "")
+        avg = pos.get("averagePrice", 0)
         result[ticker] = {
             "shares": pos.get("quantity", 0),
-            "avg_price": pos.get("averagePrice", 0),
+            "avg_price": avg,
             "current_price": pos.get("currentPrice", 0),
             "pnl": round(pos.get("ppl", 0), 2),
+            "pnl_pct": round(
+                ((pos.get("currentPrice", 0) - avg) / max(avg, 0.01)) * 100, 2
+            ),
         }
     return result
 
