@@ -125,8 +125,8 @@ export const WelcomeView = ({
           AI Trading Assistant
         </h1>
         <p className="text-muted-foreground max-w-xs pt-1 text-sm leading-6">
-          Ask about your portfolio, analyse your trades, check live prices, or create a new pie
-          — all by voice.
+          Ask about your portfolio, analyse your trades, check live prices, or create a new pie —
+          all by voice.
         </p>
 
         <Button
