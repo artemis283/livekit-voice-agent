@@ -5,7 +5,7 @@ from livekit.plugins import openai, noise_cancellation
 import json
 import sys
 import os
-from services.portfolio import get_portfolio, get_account_summary, get_trade_history, get_dividends
+from services.portfolio import get_portfolio, get_account_summary, get_trade_history, get_dividends, create_pie, lookup_ticker
 from services.market import get_stock_price, summarize_portfolio, analyse_trade_history, summarise_dividends
 from services.news import get_macro_news, get_portfolio_news
 
@@ -31,6 +31,12 @@ class VoiceAgent(Agent):
                 - Summarise dividend income by ticker
                 - Give live macro and stock-specific news context
                 - Compare current positions against historical patterns
+                - Help the user create a new Trading 212 Pie by collecting a name, ticker allocations (must total 100%), and dividend preference
+                - Look up correct T212 ticker symbols using find_ticker when a user mentions a company name
+
+                When creating a pie: always call find_ticker first to resolve each company to its exact T212 ticker
+                (e.g. AAPL_US_EQ), confirm the full details with the user, then call create_new_pie.
+                Remind them that the Pies feature is still operational but marked deprecated by Trading 212.
 
                 When the user asks for analysis, always combine multiple data sources:
                 use portfolio_overview AND analyse_trades together for a full picture.
@@ -158,6 +164,75 @@ class VoiceAgent(Agent):
         for ticker, amount in summary["by_ticker"].items():
             lines.append(f"    {ticker}: ${amount:.2f}")
         return "\n".join(lines)
+
+    # ── Ticker lookup ─────────────────────────────────────────────────────────
+
+    @function_tool
+    async def find_ticker(self, query: str) -> str:
+        """
+        Search for a Trading 212 ticker symbol by company name or partial symbol.
+        Always use this before creating a pie or when the user mentions a company name
+        rather than an exact ticker, to confirm the correct T212 ticker format
+        (e.g. AAPL_US_EQ, TSLA_US_EQ).
+        """
+        results = lookup_ticker(query)
+        if not results:
+            return f"No instruments found matching '{query}'. Try a different name or symbol."
+        lines = [f"Found {len(results)} result(s) for '{query}':"]
+        for r in results:
+            lines.append(
+                f"  {r['ticker']} — {r['name']} ({r['exchange']}, {r['type']})"
+            )
+        return "\n".join(lines)
+
+    # ── Pie management ────────────────────────────────────────────────────────
+
+    @function_tool
+    async def create_new_pie(
+        self,
+        name: str,
+        tickers: str,
+        allocations: str,
+        reinvest_dividends: bool = False,
+    ) -> str:
+        """
+        Create a new Trading 212 Pie.
+
+        Args:
+            name: The name for the pie.
+            tickers: Comma-separated list of ticker symbols, e.g. "AAPL_US_EQ,MSFT_US_EQ".
+            allocations: Comma-separated percentage allocations matching the tickers list,
+                         e.g. "60,40". Must sum to 100.
+            reinvest_dividends: Whether to reinvest dividends back into the pie.
+        """
+        ticker_list = [t.strip() for t in tickers.split(",")]
+        alloc_list = [float(a.strip()) for a in allocations.split(",")]
+
+        if len(ticker_list) != len(alloc_list):
+            return "Error: the number of tickers must match the number of allocations."
+
+        total = sum(alloc_list)
+        if round(total, 2) != 100.0:
+            return f"Error: allocations must sum to 100%, they currently sum to {total:.2f}%. Please adjust and try again."
+
+        instrument_allocations = [
+            {"ticker": t, "shares": a}
+            for t, a in zip(ticker_list, alloc_list)
+        ]
+
+        try:
+            result = create_pie(
+                name=name,
+                instrument_allocations=instrument_allocations,
+                reinvest_dividends=reinvest_dividends,
+            )
+            pie_id = result.get("id", "unknown")
+            return (
+                f"Pie '{name}' created successfully (ID: {pie_id}). "
+                f"Holdings: " + ", ".join(f"{t} {a}%" for t, a in zip(ticker_list, alloc_list))
+            )
+        except Exception as e:
+            return f"Failed to create pie: {e}"
 
     # ── News tools ────────────────────────────────────────────────────────────
 

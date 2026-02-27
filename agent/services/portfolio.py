@@ -1,5 +1,6 @@
 import base64
 import os
+import time
 import requests
 
 # Demo paper-trading base URL. Switch to https://live.trading212.com/api/v0 for real money.
@@ -88,3 +89,92 @@ def get_dividends(limit: int = 20) -> list[dict]:
     )
     r.raise_for_status()
     return r.json().get("items", [])
+
+
+# Simple in-process cache for the instruments list (rate limit: 1 req / 50s)
+_instruments_cache: list[dict] = []
+_instruments_fetched_at: float = 0.0
+_INSTRUMENTS_TTL = 600  # re-fetch at most every 10 minutes
+
+
+def _get_instruments() -> list[dict]:
+    """Fetch and cache all tradable instruments from Trading 212."""
+    global _instruments_cache, _instruments_fetched_at
+    if _instruments_cache and (time.time() - _instruments_fetched_at) < _INSTRUMENTS_TTL:
+        return _instruments_cache
+    headers = {"Authorization": _get_auth_header()}
+    r = requests.get(f"{BASE_URL}/equity/metadata/instruments", headers=headers, timeout=15)
+    r.raise_for_status()
+    _instruments_cache = r.json()
+    _instruments_fetched_at = time.time()
+    return _instruments_cache
+
+
+def lookup_ticker(query: str, max_results: int = 5) -> list[dict]:
+    """Search instruments by company name or ticker symbol.
+
+    Returns up to max_results matches, each with ticker, name, and exchange.
+    Matches are ranked: exact ticker > ticker starts-with > name contains.
+    Rate limit: shared cache, actual API call at most 1 req / 10 min.
+    """
+    q = query.strip().upper()
+    instruments = _get_instruments()
+
+    exact, starts, contains = [], [], []
+    for inst in instruments:
+        ticker: str = (inst.get("ticker") or "").upper()
+        name: str = (inst.get("name") or "").upper()
+        entry = {
+            "ticker": inst.get("ticker", ""),
+            "name": inst.get("name", ""),
+            "exchange": inst.get("exchange", ""),
+            "type": inst.get("type", ""),
+        }
+        if ticker == q or ticker == q + "_US_EQ" or ticker == q + "_EQ":
+            exact.append(entry)
+        elif ticker.startswith(q):
+            starts.append(entry)
+        elif q in ticker or q in name:
+            contains.append(entry)
+
+    results = (exact + starts + contains)[:max_results]
+    return results
+
+
+def create_pie(
+    name: str,
+    instrument_allocations: list[dict],
+    reinvest_dividends: bool = False,
+    end_of_day_dealing: bool = False,
+) -> dict:
+    """Create a new Trading 212 Pie.
+
+    Args:
+        name: Display name for the pie.
+        instrument_allocations: List of {"ticker": str, "shares": float} where
+            shares is the percentage allocation. Must sum to 100.
+        reinvest_dividends: If True, dividends are reinvested into the pie.
+        end_of_day_dealing: If True, orders execute at end of day.
+
+    Returns the created pie object from the API.
+    Rate limit: 1 req / 5s.
+    """
+    total = sum(item.get("shares", 0) for item in instrument_allocations)
+    if round(total, 4) != 100.0:
+        raise ValueError(
+            f"Instrument allocations must sum to 100%, currently sum to {total:.2f}%"
+        )
+
+    headers = {
+        "Authorization": _get_auth_header(),
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "name": name,
+        "dividendCashAction": "REINVEST" if reinvest_dividends else "TO_ACCOUNT_CASH",
+        "endOfDayDealingEnabled": end_of_day_dealing,
+        "instrumentShares": instrument_allocations,
+    }
+    r = requests.post(f"{BASE_URL}/equity/pies", json=payload, headers=headers, timeout=10)
+    r.raise_for_status()
+    return r.json()
