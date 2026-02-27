@@ -130,7 +130,7 @@ async def entrypoint(ctx: agents.JobContext):
     )
 
     await session.generate_reply(
-        instructions="Greet the user by saying hello there,  welcome to Founders and Coders."
+        instructions="Hello there, I am here to assist you with your portfolio. All decisions are your responsibility."
     )
 
 
